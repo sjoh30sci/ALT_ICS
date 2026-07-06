@@ -109,3 +109,4 @@ foreach ($rule in $rules) {
     Write-Host "  $($rule.Name) : $($rule.Protocol)/$($rule.Port)  [$status]" -ForegroundColor Gray
 }
 Write-Host "═══════════════════════════════════════════════" -ForegroundColor Green
+

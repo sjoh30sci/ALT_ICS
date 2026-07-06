@@ -1,4 +1,4 @@
-<#Requires -RunAsAdministrator
+﻿<#Requires -RunAsAdministrator
 
 .SYNOPSIS
     Removes the ALT_ICS Windows Service, firewall rules, and optionally published files.

@@ -1,4 +1,5 @@
 using ALT_ICS.GUI.Commands;
+using ALT_ICS.GUI.Services;
 using ALT_ICS.GUI.Utils;
 using ALT_ICS.Shared.Models;
 using ALT_ICS.Shared.Utils;
@@ -24,6 +25,7 @@ internal static class Program
         // Build a minimal DI container so commands can resolve services.
         var services = new ServiceCollection();
         services.AddSingleton<NetworkConfig>();
+        services.AddSingleton<ServiceClient>();
         services.AddLogging(builder =>
         {
             builder.AddConsole();

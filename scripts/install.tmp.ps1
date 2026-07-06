@@ -33,7 +33,7 @@
 param(
     [string]$PublishPath = "",
     [string]$ServiceName = "ALT_ICS",
-    [string]$ServiceDisplayName = "ALT_ICS -- Alternative Internet Connection Sharing",
+    [string]$ServiceDisplayName = "ALT_ICS - Alternative Internet Connection Sharing",
     [string]$ServiceDescription = "Custom NAT-based internet connection sharing replacing Windows ICS",
     [switch]$SkipBuild,
     [switch]$SkipFirewall,
@@ -41,7 +41,7 @@ param(
     [switch]$StartService = $true
 )
 
-$ErrorActionPreference = "Stop"
+$ErrorActionPrevention = "Stop"
 
 # ---------------------------------------------------------------------------
 # Coloured output helpers
@@ -376,3 +376,4 @@ Write-Host ""
 Write-Host "  Manage via: services.msc  or  sc.exe query $ServiceName"
 Write-Host "  Uninstall : .\scripts\uninstall.ps1"
 Write-Host ""
+

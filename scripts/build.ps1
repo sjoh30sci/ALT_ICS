@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Builds the ALT_ICS solution and publishes the Windows Service.
 .DESCRIPTION
@@ -113,11 +113,16 @@ if (-not $OutputPath) {
 }
 
 Write-Status "Publishing service to: $OutputPath"
+
+# Restore with RID so PublishReadyToRun assets resolve correctly
+& $dotnet restore "`"$serviceProject`"" -r win-x64
+if ($LASTEXITCODE -ne 0) { throw "dotnet restore (win-x64) failed with exit code $LASTEXITCODE" }
+
 $publishArgs = @(
     "publish",
     "`"$serviceProject`"",
     "-c", $Configuration,
-    "--no-build",
+    "-r", "win-x64",
     "-o", "`"$OutputPath`""
 )
 

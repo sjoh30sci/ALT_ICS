@@ -35,7 +35,7 @@
 [CmdletBinding()]
 param(
     [string]$ServiceName = "ALT_ICS",
-    [string]$ServiceDisplayName = "ALT_ICS -- Alternative Internet Connection Sharing",
+    [string]$ServiceDisplayName = "ALT_ICS - Alternative Internet Connection Sharing",
     [string]$ServiceDescription = "Custom NAT-based internet connection sharing replacing Windows ICS",
     [switch]$SkipFirewall,
     [switch]$SkipIpForward,
@@ -91,7 +91,7 @@ if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administra
 
 Write-Host ""
 Write-Host "╔═══════════════════════════════════════════════╗" -ForegroundColor Cyan
-Write-Host "║         ALT_ICS -- Full Deployment             ║" -ForegroundColor Cyan
+Write-Host "║         ALT_ICS - Full Deployment             ║" -ForegroundColor Cyan
 Write-Host "╚═══════════════════════════════════════════════╝" -ForegroundColor Cyan
 
 # ---------------------------------------------------------------------------
@@ -142,40 +142,26 @@ else {
 # 3. Install service
 # ---------------------------------------------------------------------------
 Write-Step "Installing Windows Service ..."
-$exePath = Join-Path -Path $PublishPath -ChildPath "ALT_ICS.Service.exe"
-
-if (-not (Test-Path -LiteralPath $exePath)) {
-    Write-Fail "Service executable not found: $exePath"
+$installScript = Join-Path -Path $PSScriptRoot -ChildPath "install.tmp.ps1"
+if (-not (Test-Path -LiteralPath $installScript)) {
+    Write-Fail "Install script not found: $installScript"
     exit 1
 }
 
-# Stop and remove existing service if present
-$existing = & sc.exe query $ServiceName 2>$null
-if ($LASTEXITCODE -eq 0) {
-    Write-Step "Stopping existing '$ServiceName' service ..."
-    & sc.exe stop $ServiceName 2>&1 | Out-Null
-    Start-Sleep -Seconds 2
-    Write-Step "Removing existing '$ServiceName' service ..."
-    & sc.exe delete $ServiceName 2>&1 | Out-Null
-    Start-Sleep -Seconds 1
-}
+try {
+    Write-Info "PublishPath   = [$PublishPath]"
+    Write-Info "ServiceName   = [$ServiceName]"
+    Write-Info "DisplayName   = [$ServiceDisplayName]"
+    Write-Info "Description   = [$ServiceDescription]"
 
-# Create the service
-Write-Step "Creating Windows Service '$ServiceName' ..."
-$binaryPath = "`"$exePath`""
-& sc.exe create $ServiceName binPath= $binaryPath start= auto DisplayName= "`"$ServiceDisplayName`""
-if ($LASTEXITCODE -ne 0) {
-    Write-Fail "sc.exe create failed with exit code $LASTEXITCODE"
+    & $installScript -PublishPath $PublishPath -ServiceName $ServiceName -ServiceDisplayName $ServiceDisplayName -ServiceDescription $ServiceDescription
+    if ($LASTEXITCODE -ne 0) { throw "install.ps1 exited with code $LASTEXITCODE" }
+    Write-Success "Service installed"
+}
+catch {
+    Write-Fail "Installation step failed: $_"
     exit 1
 }
-
-# Set description
-& sc.exe description $ServiceName "`"$ServiceDescription`""
-
-# Set recovery options (restart on failure)
-& sc.exe failure $ServiceName reset= 86400 actions= restart/60000/restart/120000/restart/300000
-
-Write-Success "Service '$ServiceName' created"
 
 # ---------------------------------------------------------------------------
 # 4. Quick health verification
@@ -227,10 +213,10 @@ Write-Host "  Firewall       : $(if ($SkipFirewall) { 'Skipped' } else { 'Config
 Write-Host "  IP forwarding  : $(if ($SkipIpForward) { 'Skipped' } else { 'Enabled' })"
 Write-Host ""
 Write-Host "  Ports opened:"
-Write-Host "    53/UDP   -- DNS relay"
-Write-Host "    67/UDP   -- DHCP server"
-Write-Host "    51000/TCP -- SignalR control channel"
-Write-Host "    51001/TCP -- Health endpoint"
+Write-Host "    53/UDP   - DNS relay"
+Write-Host "    67/UDP   - DHCP server"
+Write-Host "    51000/TCP - SignalR control channel"
+Write-Host "    51001/TCP - Health endpoint"
 Write-Host ""
 Write-Host "  Manage : sc.exe query $ServiceName"
 Write-Host "  Stop   : sc.exe stop $ServiceName"
@@ -238,3 +224,4 @@ Write-Host "  Start  : sc.exe start $ServiceName"
 Write-Host "  Logs   : Event Viewer -> Windows Logs -> Application (source: ALT_ICS)"
 Write-Host "  Remove : .\scripts\uninstall.ps1"
 Write-Host ""
+
