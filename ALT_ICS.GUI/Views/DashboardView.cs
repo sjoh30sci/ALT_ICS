@@ -29,8 +29,6 @@ public class DashboardView
 
         if (!Console.IsOutputRedirected)
         {
-            await _client.ConnectAsync();
-
             // Subscribe to live updates
             _client.OnHealthReportUpdated += report =>
             {
@@ -51,8 +49,10 @@ public class DashboardView
                     {
                         try
                         {
+                            await _client.ConnectAsync();
                             var health = await _client.RequestHealthAsync(ct);
                             var stats = await _client.RequestNatStatsAsync(ct);
+                            var refreshTime = DateTime.Now;
 
                             var grid = new Grid();
                             grid.AddColumn();
@@ -68,7 +68,7 @@ public class DashboardView
                             // Stats panel
                             var statsPanel = new Panel(BuildStatsTable(stats!))
                             {
-                                Header = new PanelHeader("NAT Statistics"),
+                                Header = new PanelHeader($"NAT Statistics  [[{refreshTime:HH:mm:ss}]]"),
                                 Border = BoxBorder.Rounded
                             };
 
@@ -76,9 +76,14 @@ public class DashboardView
                             ctx.UpdateTarget(new Panel(grid) { Border = BoxBorder.None });
                             ctx.Refresh();
                         }
-                        catch
+                        catch (HttpRequestException)
                         {
-                            // Not connected yet
+                            // Service not reachable, will retry
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            // Dashboard shutting down
+                            break;
                         }
 
                         await Task.Delay(2000, ct);
