@@ -1,3 +1,4 @@
+using System.Net.Http;
 using ALT_ICS.GUI.Services;
 using ALT_ICS.GUI.Views;
 using ALT_ICS.Shared.Models;
@@ -55,13 +56,38 @@ public sealed class StartSharingCommand : AsyncCommand<StartSharingCommand.Setti
 
     public override async Task<int> ExecuteAsync(CommandContext context, Settings settings)
     {
-        AnsiConsole.MarkupLine("[yellow]Requesting service start...[/]");
-
-        // TODO: Implement actual SignalR call to the service.
-        // await _client.StartSharingAsync();
-
-        AnsiConsole.MarkupLine("[green]Start command sent to ALT_ICS service.[/]");
-        return await Task.FromResult(0);
+        try
+        {
+            return await AnsiConsole.Status().StartAsync("Connecting to service...", async ctx =>
+            {
+                ctx.Status("Starting...");
+                await _client.ConnectAsync();
+                var result = await _client.StartSharingAsync();
+                if (result.OverallHealth)
+                {
+                    AnsiConsole.MarkupLine("[green]Service started successfully![/]");
+                }
+                else
+                {
+                    AnsiConsole.MarkupLine("[yellow]Service started with issues:[/]");
+                    foreach (var c in result.Components)
+                    {
+                        AnsiConsole.MarkupLine($"  {(c.IsHealthy ? "[green]" : "[red]")}{c.ComponentName}: {c.Message}[/]");
+                    }
+                }
+                return 0;
+            });
+        }
+        catch (HttpRequestException)
+        {
+            AnsiConsole.MarkupLine("[yellow]Service is not running. Use 'altics start' to start it, or deploy with scripts\\deploy.ps1[/]");
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            AnsiConsole.MarkupLine($"[red]Error: {ex.Message}[/]");
+            return 0;
+        }
     }
 }
 
@@ -88,13 +114,27 @@ public sealed class StopSharingCommand : AsyncCommand<StopSharingCommand.Setting
 
     public override async Task<int> ExecuteAsync(CommandContext context, Settings settings)
     {
-        AnsiConsole.MarkupLine("[yellow]Requesting service stop...[/]");
-
-        // TODO: Implement actual SignalR call to the service.
-        // await _client.StopSharingAsync();
-
-        AnsiConsole.MarkupLine("[green]Stop command sent to ALT_ICS service.[/]");
-        return await Task.FromResult(0);
+        try
+        {
+            return await AnsiConsole.Status().StartAsync("Connecting to service...", async ctx =>
+            {
+                ctx.Status("Stopping...");
+                await _client.ConnectAsync();
+                var result = await _client.StopSharingAsync();
+                AnsiConsole.MarkupLine("[green]Service stopped successfully![/]");
+                return 0;
+            });
+        }
+        catch (HttpRequestException)
+        {
+            AnsiConsole.MarkupLine("[yellow]Service is not running. Use 'altics start' to start it, or deploy with scripts\\deploy.ps1[/]");
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            AnsiConsole.MarkupLine($"[red]Error: {ex.Message}[/]");
+            return 0;
+        }
     }
 }
 
@@ -104,27 +144,50 @@ public sealed class StopSharingCommand : AsyncCommand<StopSharingCommand.Setting
 
 public sealed class StatusCommand : AsyncCommand<StatusCommand.Settings>
 {
+    private readonly ServiceClient _client;
+    private readonly ILogger<StatusCommand> _logger;
+
     public sealed class Settings : CommandSettings { }
+
+    public StatusCommand(ServiceClient client, ILogger<StatusCommand> logger)
+    {
+        _client = client;
+        _logger = logger;
+    }
 
     public override async Task<int> ExecuteAsync(CommandContext context, Settings settings)
     {
-        AnsiConsole.MarkupLine("[yellow]Querying ALT_ICS service status...[/]");
-
-        // TODO: Call service health endpoint and display results.
-        var health = new HealthReport
+        try
         {
-            OverallHealth = false,
-            Components = new List<ComponentHealth>
-            {
-                new() { ComponentName = "NAT",  IsHealthy = false, Message = "Not connected" },
-                new() { ComponentName = "DHCP", IsHealthy = false, Message = "Not connected" },
-                new() { ComponentName = "DNS",  IsHealthy = false, Message = "Not connected" }
-            },
-            ReportedAt = DateTime.UtcNow
-        };
+            await _client.ConnectAsync();
+            var health = await _client.RequestHealthAsync();
 
-        DashboardView.RenderHealth(health);
-        return await Task.FromResult(0);
+            var table = new Table();
+            table.AddColumn("Component");
+            table.AddColumn("Status");
+            table.AddColumn("Message");
+
+            foreach (var c in health.Components)
+            {
+                table.AddRow(
+                    c.ComponentName,
+                    c.IsHealthy ? "[green]Healthy[/]" : "[red]Unhealthy[/]",
+                    c.Message ?? ""
+                );
+            }
+
+            AnsiConsole.Write(table);
+        }
+        catch (HttpRequestException)
+        {
+            AnsiConsole.MarkupLine("[yellow]Service is not running. Use 'altics start' to start it, or deploy with scripts\\deploy.ps1[/]");
+        }
+        catch (Exception ex)
+        {
+            AnsiConsole.MarkupLine($"[red]Error: {ex.Message}[/]");
+        }
+
+        return 0;
     }
 }
 
@@ -177,16 +240,45 @@ public sealed class ConfigCommand : AsyncCommand<ConfigCommand.Settings>
 
 public sealed class DashboardCommand : AsyncCommand<DashboardCommand.Settings>
 {
+    private readonly ServiceClient _client;
+
     public sealed class Settings : CommandSettings
     {
         [CommandOption("--refresh <SECONDS>")]
         public int RefreshSeconds { get; set; } = 2;
     }
 
+    public DashboardCommand(ServiceClient client)
+    {
+        _client = client;
+    }
+
     public override async Task<int> ExecuteAsync(CommandContext context, Settings settings)
     {
-        var dashboard = new DashboardView();
-        await dashboard.RunAsync(settings.RefreshSeconds);
+        using var cts = new CancellationTokenSource();
+
+        // Listen for Q key to exit dashboard
+        _ = Task.Run(() =>
+        {
+            while (!cts.Token.IsCancellationRequested)
+            {
+                if (Console.KeyAvailable)
+                {
+                    var key = Console.ReadKey(true);
+                    if (key.Key == ConsoleKey.Q)
+                    {
+                        cts.Cancel();
+                        break;
+                    }
+                }
+                Thread.Sleep(100);
+            }
+        });
+
+        var dashboard = new DashboardView(_client);
+        await dashboard.RunAsync(cts.Token);
+
+        AnsiConsole.MarkupLine("[green]Dashboard closed.[/]");
         return 0;
     }
 }

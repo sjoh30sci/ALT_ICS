@@ -118,16 +118,21 @@ public sealed class DNSRelayService : IDisposable, IAsyncDisposable
         }
         catch (SocketException ex) when (ex.SocketErrorCode == SocketError.AddressAlreadyInUse)
         {
+            _logger.LogWarning(CommonLogger.EventIds.DnsRelay,
+                "Port {Port} is already in use. DNS relay will be disabled. {Message}",
+                Constants.DnsPort, ex.Message);
             _isRunning = false;
-            _logger.LogError(CommonLogger.EventIds.DnsRelay, ex,
-                "Port {Port} is already in use. Another DNS server may be running.", Constants.DnsPort);
-            throw;
+            _cts?.Cancel();
+            _cts?.Dispose();
+            _cts = null;
         }
         catch (Exception ex)
         {
-            _isRunning = false;
             _logger.LogServiceError(nameof(DNSRelayService), ex, "Failed to start DNS relay");
-            throw;
+            _isRunning = false;
+            _cts?.Cancel();
+            _cts?.Dispose();
+            _cts = null;
         }
 
         await Task.CompletedTask;

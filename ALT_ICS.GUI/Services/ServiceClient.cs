@@ -98,43 +98,37 @@ public class ServiceClient : IAsyncDisposable
     /// <summary>
     /// Sends a start-sharing request to the service hub.
     /// </summary>
-    public async Task StartSharingAsync()
+    public async Task<HealthReport> StartSharingAsync(CancellationToken ct = default)
     {
         EnsureConnected();
-        // TODO: Define the hub method name once the service hub is implemented.
-        // await _connection.InvokeAsync("StartSharing");
-        await Task.CompletedTask;
+        return await _connection!.InvokeAsync<HealthReport>("StartSharing", ct);
     }
 
     /// <summary>
     /// Sends a stop-sharing request to the service hub.
     /// </summary>
-    public async Task StopSharingAsync()
+    public async Task<HealthReport> StopSharingAsync(CancellationToken ct = default)
     {
         EnsureConnected();
-        // await _connection.InvokeAsync("StopSharing");
-        await Task.CompletedTask;
+        return await _connection!.InvokeAsync<HealthReport>("StopSharing", ct);
     }
 
     /// <summary>
     /// Requests the latest health report from the service.
     /// </summary>
-    public async Task<HealthReport?> RequestHealthAsync()
+    public async Task<HealthReport?> RequestHealthAsync(CancellationToken ct = default)
     {
         EnsureConnected();
-        // TODO: Implement hub method.
-        // return await _connection.InvokeAsync<HealthReport>("GetHealth");
-        return await Task.FromResult<HealthReport?>(null);
+        return await _connection!.InvokeAsync<HealthReport>("GetHealth", ct);
     }
 
     /// <summary>
     /// Requests the latest NAT stats from the service.
     /// </summary>
-    public async Task<NATStats?> RequestNatStatsAsync()
+    public async Task<NATStats?> RequestNatStatsAsync(CancellationToken ct = default)
     {
         EnsureConnected();
-        // return await _connection.InvokeAsync<NATStats>("GetNatStats");
-        return await Task.FromResult<NATStats?>(null);
+        return await _connection!.InvokeAsync<NATStats>("GetNatStats", ct);
     }
 
     /// <inheritdoc />

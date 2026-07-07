@@ -1,22 +1,22 @@
+using ALT_ICS.Service.Hubs;
 using ALT_ICS.Service.Logging;
 using ALT_ICS.Service.Services;
 using ALT_ICS.Shared.Models;
 using ALT_ICS.Shared.Models.Interfaces;
 using ALT_ICS.Shared.Utils;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace ALT_ICS.Service;
 
-/// <summary>
-/// Application entry point. Configures and runs the Windows Service host.
-/// </summary>
 internal static class Program
 {
     private static async Task Main(string[] args)
     {
-        var builder = Host.CreateApplicationBuilder(args);
+        var builder = WebApplication.CreateBuilder(args);
 
         // ---------- configuration ----------
         builder.Configuration.Sources.Clear();
@@ -29,19 +29,19 @@ internal static class Program
         builder.Services.AddSingleton<NetworkConfig>();
         builder.Services.AddSingleton<ServiceEventLogger>();
 
-        // Register the NAT service (concrete type for DI).
         builder.Services.AddSingleton<NATConnectionService>();
         builder.Services.AddSingleton<INATService>(sp => sp.GetRequiredService<NATConnectionService>());
 
-        // Register the connection manager.
         builder.Services.AddSingleton<NetworkSharingService>();
         builder.Services.AddSingleton<IConnectionManager>(sp => sp.GetRequiredService<NetworkSharingService>());
 
-        // Register sub-services.
         builder.Services.AddSingleton<DHCPServer>();
         builder.Services.AddSingleton<DNSRelayService>();
 
-        // Register the background worker that drives the service lifecycle.
+        // SignalR for GUI communication
+        builder.Services.AddSignalR();
+
+        // Background worker that drives the service lifecycle
         builder.Services.AddHostedService<WindowsServiceHost>();
 
         // ---------- logging ----------
@@ -53,13 +53,25 @@ internal static class Program
             settings.LogName = Constants.EventLogName;
         });
 
-        // ---------- build & run ----------
-        var host = builder.Build();
+        // ---------- build ----------
+        builder.Host.UseWindowsService();
+        var app = builder.Build();
 
-        // Apply configuration from appsettings into NetworkConfig singleton.
-        var config = host.Services.GetRequiredService<NetworkConfig>();
-        builder.Configuration.Bind("NetworkConfig", config);
+        // Apply configuration from appsettings into NetworkConfig singleton
+        var config = app.Services.GetRequiredService<NetworkConfig>();
+        app.Configuration.Bind("NetworkConfig", config);
 
-        await host.RunAsync();
+        // Configure Kestrel to listen on the SignalR and health ports
+        app.Urls.Add($"http://localhost:{Constants.SignalRPort}");
+        app.Urls.Add($"http://localhost:{Constants.HealthHttpPort}");
+
+        // Map SignalR hub for GUI communication
+        app.MapHub<MonitorHub>(Constants.SignalRHubPath);
+
+        // Map a simple health check endpoint
+        app.MapGet("/health", () => Results.Ok(new { Status = "Running", Timestamp = DateTime.UtcNow }));
+
+        // ---------- run ----------
+        await app.RunAsync();
     }
 }
