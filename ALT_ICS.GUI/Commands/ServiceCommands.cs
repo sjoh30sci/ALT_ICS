@@ -162,6 +162,12 @@ public sealed class StatusCommand : AsyncCommand<StatusCommand.Settings>
             await _client.ConnectAsync();
             var health = await _client.RequestHealthAsync();
 
+            if (health is null)
+            {
+                AnsiConsole.MarkupLine("[red]Could not retrieve health status.[/]");
+                return 0;
+            }
+
             var table = new Table();
             table.AddColumn("Component");
             table.AddColumn("Status");
